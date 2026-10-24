@@ -120,6 +120,18 @@ else
     curl -sf "${OLLAMA_URL}" >/dev/null 2>&1 || break
     sleep 0.5
   done
+  if curl -sf "${OLLAMA_URL}" >/dev/null 2>&1; then
+    note "the app ignored the polite quit; stopping it directly"
+    pkill -x Ollama >/dev/null 2>&1 || true
+    pkill -x ollama >/dev/null 2>&1 || true
+    for _ in $(seq 1 20); do
+      curl -sf "${OLLAMA_URL}" >/dev/null 2>&1 || break
+      sleep 0.5
+    done
+    if curl -sf "${OLLAMA_URL}" >/dev/null 2>&1; then
+      die "something is still serving ${OLLAMA_URL}. A second Ollama (Homebrew service?) may be running: brew services stop ollama"
+    fi
+  fi
   open -a Ollama
   for i in $(seq 1 60); do
     if curl -sf "${OLLAMA_URL}" >/dev/null 2>&1; then
@@ -135,6 +147,23 @@ fi
 say "Downloading ${MODEL}"
 note "This is several GB and happens once. Models live in ~/.ollama/models."
 run ollama pull "${MODEL}"
+
+# ---------------------------------------------------- did it take? ----
+say "Checking the server really runs ${MODEL} with context ${CONTEXT}"
+if [[ ${DRY_RUN} -eq 1 ]]; then
+  note "(would load the model once and compare the CONTEXT column of 'ollama ps' with ${CONTEXT})"
+else
+  curl -s "${OLLAMA_URL}/api/generate" \
+    -d "{\"model\":\"${MODEL}\",\"prompt\":\"hi\",\"stream\":false,\"options\":{\"num_predict\":1}}" >/dev/null
+  SERVER_CTX="$(ollama ps 2>/dev/null | awk -v m="${MODEL}" '$1 == m { for (i = 3; i <= NF; i++) if ($i ~ /^[0-9]+$/ && $i >= 1024) { print $i; exit } }')"
+  if [[ -z "${SERVER_CTX}" ]]; then
+    note "WARNING: could not read a CONTEXT column from 'ollama ps' (older Ollama?). ./verify.sh will tell you more."
+  elif [[ "${SERVER_CTX}" != "${CONTEXT}" ]]; then
+    die "the server is running ${MODEL} with context ${SERVER_CTX}, not ${CONTEXT}. Ollama did not restart with the new setting. Quit it from the menu bar (llama icon), then re-run this script."
+  else
+    note "ollama ps reports context ${SERVER_CTX} for ${MODEL}"
+  fi
+fi
 
 # -------------------------------------------------------- opencode config ----
 say "Writing the OpenCode config"

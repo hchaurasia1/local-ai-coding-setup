@@ -12,6 +12,7 @@ KIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
 OPENCODE_CONFIG="${HOME}/.config/opencode/opencode.json"
 PASS=0; WARN=0; FAIL=0
+SERVER_CTX=""
 
 say()  { printf '\n==> %s\n' "$*"; }
 ok()   { PASS=$((PASS + 1)); printf '  PASS  %s\n' "$*"; }
@@ -49,7 +50,9 @@ else
 fi
 
 CTX_ENV="$(launchctl getenv OLLAMA_CONTEXT_LENGTH 2>/dev/null || true)"
-if [[ -n "${CTX_ENV}" ]]; then
+if [[ -n "${CTX_ENV}" && -n "${CONTEXT:-}" && "${CTX_ENV}" != "${CONTEXT}" ]]; then
+  bad "OLLAMA_CONTEXT_LENGTH=${CTX_ENV} but the profile says ${CONTEXT}. Run ./install.sh again."
+elif [[ -n "${CTX_ENV}" ]]; then
   ok "OLLAMA_CONTEXT_LENGTH=${CTX_ENV} is set for GUI apps"
 else
   warn "OLLAMA_CONTEXT_LENGTH is not set for GUI apps; the server is probably on its 4096 default. Run ./install.sh"
@@ -159,6 +162,14 @@ elif printf '%s\n' "${PS_OUT}" | grep -E '[0-9]+%/[0-9]+% CPU/GPU' >/dev/null; t
 else
   warn "could not read the PROCESSOR column (model may already have been unloaded)"
 fi
+SERVER_CTX="$(printf '%s\n' "${PS_OUT}" | awk -v m="${MODEL}" '$1 == m { for (i = 3; i <= NF; i++) if ($i ~ /^[0-9]+$/ && $i >= 1024) { print $i; exit } }')"
+if [[ -n "${PS_OUT}" && -z "${SERVER_CTX}" ]]; then
+  warn "could not read the CONTEXT column from 'ollama ps'"
+elif [[ -n "${SERVER_CTX}" && -n "${CONTEXT:-}" && "${SERVER_CTX}" != "${CONTEXT}" ]]; then
+  bad "the server is running with context ${SERVER_CTX} but the profile says ${CONTEXT}. Ollama did not restart with the new setting: quit it from the menu bar and re-run ./install.sh"
+elif [[ -n "${SERVER_CTX}" ]]; then
+  ok "server context ${SERVER_CTX}$( [[ -n "${CONTEXT:-}" ]] && printf ' matches the profile' )"
+fi
 
 # ---------------------------------------------------------------- memory ----
 say "Memory"
@@ -175,6 +186,7 @@ machine:        $(sysctl -n machdep.cpu.brand_string), ${MEM_GB} GB
 date:           $(date +%Y-%m-%d)
 model:          ${MODEL}
 context (env):  ${CTX_ENV:-unset (4096 default)}
+context (server): ${SERVER_CTX:-?}
 kv cache:       ${KV_ENV:-f16 (default)}
 model load:     ${LOAD_LINE} s
 speed:          ${SPEED_LINE}
