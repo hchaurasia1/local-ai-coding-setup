@@ -1,6 +1,6 @@
 ==> Ollama server
   PASS  reachable at http://localhost:11434 (Ollama is running)
-  PASS  OLLAMA_CONTEXT_LENGTH=32768 is set for GUI apps
+  PASS  OLLAMA_CONTEXT_LENGTH=65536 is set for GUI apps
   PASS  OLLAMA_KV_CACHE_TYPE=q8_0
 
 ==> Model qwen3.5:9b
@@ -8,30 +8,32 @@
 
 ==> Generation speed
   PASS  model load 0.0 s (near 0 means it was already in memory)
-  PASS  19.8 tok/s generation, 175 tok/s prompt processing (1363-token prompt)
+  PASS  20.3 tok/s generation, 179 tok/s prompt processing (1362-token prompt)
 
 ==> Tool-call probe (a coding agent cannot read or edit files without this)
   PASS  model emitted a tool call: get_weather {"city":"Pune"}
 
 ==> Where the model is running (ollama ps)
     NAME          ID              SIZE      PROCESSOR    CONTEXT    RUNNER    UNTIL
-    qwen3.5:9b    d63f830f28d5    8.5 GB    100% GPU     32768      mlx       29 minutes from now
+    qwen3.5:9b    d63f830f28d5    8.2 GB    100% GPU     65536      mlx       29 minutes from now
   PASS  100% GPU: nothing spilled to the CPU
+  PASS  server context 65536 matches the profile
 
 ==> Memory
-  PASS  16 GB unified memory, 28% free right now (memory_pressure)
+  PASS  16 GB unified memory, 33% free right now (memory_pressure)
 
-==> Summary: 9 pass, 0 warn, 0 fail
+==> Summary: 10 pass, 0 warn, 0 fail
 
 ---- paste into RESULTS.md ----
 machine:        Apple M1 Pro, 16 GB
 date:           2026-10-24
 model:          qwen3.5:9b
-context (env):  32768
+context (env):  65536
+context (server): 65536
 kv cache:       q8_0
 model load:     0.0 s
-speed:          19.8 tok/s generation, 175 tok/s prompt processing (1363-token prompt)
+speed:          20.3 tok/s generation, 179 tok/s prompt processing (1362-token prompt)
 tool call:      CALLED get_weather {"city":"Pune"}
-ollama ps:      qwen3.5:9b    d63f830f28d5    8.5 GB    100% GPU     32768      mlx       29 minutes from now
-memory free:    28%
+ollama ps:      qwen3.5:9b    d63f830f28d5    8.2 GB    100% GPU     65536      mlx       29 minutes from now
+memory free:    33%
 --------------------------------
