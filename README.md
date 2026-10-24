@@ -41,7 +41,8 @@ cd local-ai-coding-setup
 open CHECKLIST.md                # the Conductor steps
 ```
 
-Add `--dry-run` to `install.sh` to see every command before it runs.
+Add `--dry-run` to `install.sh` to see every command before it runs, and
+`--config-only` to rewrite just the OpenCode config against the running server.
 
 ## What is in here
 
@@ -60,10 +61,15 @@ results/<profile>/          screenshots
 - `install.sh` overwrites `~/.config/opencode/opencode.json` after backing up
   the old one next to it. If you already use OpenCode with other providers,
   merge by hand instead.
-- Server settings are applied with `launchctl setenv`, which is how the Ollama
-  menu-bar app reads environment variables. They survive reboots only for the
-  current login session; re-run `install.sh` after a restart if `verify.sh`
-  warns about the context length.
+- The Ollama menu-bar app has its own context-length setting (llama icon,
+  Settings). `install.sh` sets `OLLAMA_CONTEXT_LENGTH` with `launchctl setenv`,
+  which the app honours on a fresh install, but once the app has stored a
+  value of its own that value wins. So the script checks what the server
+  actually runs after every change and, if it differs, tells you to move the
+  slider and re-run with `--config-only`. On an M1 Pro this is exactly what
+  happened going from 32k to 64k.
+- `launchctl setenv` values last for the current login session. After a
+  reboot, run `./verify.sh` and re-run `install.sh` if it complains.
 - `OLLAMA_KV_CACHE_TYPE=q8_0` halves the memory the context window takes. It
   needs flash attention, which the script also turns on.
 - A 9B model is a long way from a frontier model. Expect slower turns, the

@@ -69,6 +69,7 @@ notes from the first task. Drop screenshots in `results/<profile>/`.
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | Model missing from Conductor's OpenCode picker | Ollama not running, or `opencode.json` invalid | Check the llama icon in the menu bar; run `./verify.sh`; `python3 -m json.tool ~/.config/opencode/opencode.json` |
+| `install.sh` or `verify.sh` says the server runs context X but the profile says Y | The Ollama app's own setting overrides the environment variable | Llama icon in the menu bar, Settings, move the context length slider to Y; then `./install.sh <profile> --config-only` |
 | `ollama ps` shows e.g. `40%/60% CPU/GPU` | Weights plus context do not fit in GPU memory | Lower `CONTEXT` in the profile or set `MODEL` to `FALLBACK_MODEL`, re-run `./install.sh` |
 | Tool calls come back garbled or as prose mid-task | Context overflowed | Raise `CONTEXT` if `ollama ps` is at 100% GPU; otherwise use a smaller model |
 | OpenCode asks for an API key | `small_model` not set, so it reached for a cloud provider | Re-run `./install.sh`; the template sets `small_model` to the local model |

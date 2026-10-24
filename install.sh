@@ -10,8 +10,10 @@
 # Usage:
 #   ./install.sh <profile> [--dry-run]
 #
-#   <profile>   a file in profiles/ without the .env suffix, e.g. m1pro-16gb
-#   --dry-run   print every command that would run instead of running it
+#   <profile>      a file in profiles/ without the .env suffix, e.g. m1pro-16gb
+#   --dry-run      print every command that would run instead of running it
+#   --config-only  skip install, server settings, restart and download; only
+#                  check the running server and rewrite the OpenCode config
 #
 # Safe to re-run. Re-run it after editing a profile (for example to raise
 # CONTEXT once `ollama ps` shows the model fully on the GPU).
@@ -23,7 +25,7 @@ OPENCODE_CONFIG="${OPENCODE_DIR}/opencode.json"
 OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
 
 usage() {
-  echo "usage: $0 <profile> [--dry-run]"
+  echo "usage: $0 <profile> [--dry-run] [--config-only]"
   echo "profiles:"
   for f in "${KIT_DIR}"/profiles/*.env; do
     echo "  $(basename "${f%.env}")"
@@ -35,10 +37,12 @@ note() { printf '    %s\n' "$*"; }
 die()  { printf 'error: %s\n' "$*" >&2; exit 1; }
 
 DRY_RUN=0
+CONFIG_ONLY=0
 PROFILE=""
 for arg in "$@"; do
   case "${arg}" in
     --dry-run) DRY_RUN=1 ;;
+    --config-only) CONFIG_ONLY=1 ;;
     -h|--help) usage; exit 0 ;;
     -*) echo "unknown flag: ${arg}" >&2; usage; exit 2 ;;
     *) PROFILE="${arg}" ;;
@@ -77,6 +81,10 @@ MEM_GB=$(( $(sysctl -n hw.memsize) / 1024 / 1024 / 1024 ))
 note "$(sysctl -n machdep.cpu.brand_string), ${MEM_GB} GB unified memory"
 note "profile ${PROFILE}: model ${MODEL}, context ${CONTEXT}, KV cache ${KV_CACHE}"
 [[ ${DRY_RUN} -eq 1 ]] && note "(dry run: nothing below is executed)"
+
+if [[ ${CONFIG_ONLY} -eq 1 ]]; then
+  say "Config only: skipping install, server settings, restart and download"
+else
 
 # -------------------------------------------------------------- homebrew ----
 say "Checking Homebrew"
@@ -158,18 +166,26 @@ say "Downloading ${MODEL}"
 note "This is several GB and happens once. Models live in ~/.ollama/models."
 run ollama pull "${MODEL}"
 
+fi
+
 # ---------------------------------------------------- did it take? ----
 say "Checking the server really runs ${MODEL} with context ${CONTEXT}"
 if [[ ${DRY_RUN} -eq 1 ]]; then
   note "(would load the model once and compare the CONTEXT column of 'ollama ps' with ${CONTEXT})"
 else
+  curl -sf "${OLLAMA_URL}" >/dev/null 2>&1 || die "Ollama is not running at ${OLLAMA_URL}. Open it (Spotlight -> Ollama) and re-run."
   curl -s "${OLLAMA_URL}/api/generate" \
     -d "{\"model\":\"${MODEL}\",\"prompt\":\"hi\",\"stream\":false,\"options\":{\"num_predict\":1}}" >/dev/null
   SERVER_CTX="$(ollama ps 2>/dev/null | awk -v m="${MODEL}" '$1 == m { for (i = 3; i <= NF; i++) if ($i ~ /^[0-9]+$/ && $i >= 1024) { print $i; exit } }')"
   if [[ -z "${SERVER_CTX}" ]]; then
     note "WARNING: could not read a CONTEXT column from 'ollama ps' (older Ollama?). ./verify.sh will tell you more."
   elif [[ "${SERVER_CTX}" != "${CONTEXT}" ]]; then
-    die "the server is running ${MODEL} with context ${SERVER_CTX}, not ${CONTEXT}. Ollama did not restart with the new setting. Quit it from the menu bar (llama icon), then re-run this script."
+    printf 'error: the server is running %s with context %s, not %s.\n' "${MODEL}" "${SERVER_CTX}" "${CONTEXT}" >&2
+    note "The Ollama menu-bar app has its own context-length setting, and once set it"
+    note "overrides OLLAMA_CONTEXT_LENGTH. Click the llama icon -> Settings and move the"
+    note "context length slider to ${CONTEXT}. The app restarts the server itself. Then run:"
+    note "  ./install.sh ${PROFILE} --config-only"
+    exit 1
   else
     note "ollama ps reports context ${SERVER_CTX} for ${MODEL}"
   fi
