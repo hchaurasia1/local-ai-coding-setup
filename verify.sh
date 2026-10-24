@@ -72,18 +72,42 @@ else
 fi
 
 # ----------------------------------------------------------------- speed ----
-say "Generation speed (one short completion; the first call includes load time)"
-GEN_REQ="$(python3 -I -c 'import json, sys; print(json.dumps({"model": sys.argv[1], "prompt": "Write a four-line poem about git worktrees.", "stream": False, "options": {"num_predict": 120}}))' "${MODEL}")"
-GEN_RESP="$(curl -s "${OLLAMA_URL}/api/generate" -d "${GEN_REQ}")"
-SPEED_LINE="$(printf '%s' "${GEN_RESP}" | python3 -I -c '
+say "Generation speed"
+# Call 1: a tiny prompt, only to load the model and time the load.
+WARM_REQ="$(python3 -I -c 'import json, sys; print(json.dumps({"model": sys.argv[1], "prompt": "Say hi.", "stream": False, "options": {"num_predict": 8}}))' "${MODEL}")"
+WARM_RESP="$(curl -s "${OLLAMA_URL}/api/generate" -d "${WARM_REQ}")"
+LOAD_LINE="$(printf '%s' "${WARM_RESP}" | python3 -I -c '
+import json, sys
+r = json.load(sys.stdin)
+if "error" in r:
+    print("ERROR " + str(r["error"])); sys.exit(0)
+print("%.1f" % (r.get("load_duration", 0) / 1e9))
+')"
+case "${LOAD_LINE}" in
+  ERROR*) bad "warm-up call failed: ${LOAD_LINE#ERROR }" ;;
+  *)      ok "model load ${LOAD_LINE} s (near 0 means it was already in memory)" ;;
+esac
+
+# Call 2: a ~1200-token prompt, so prompt processing is measured on something
+# the size of a real source file rather than a one-line question. A timestamp
+# at the front defeats Ollama's prompt cache on repeat runs.
+LONG_REQ="$(python3 -I -c '
+import json, sys, time
+para = ("A git worktree lets you check out more than one branch of the same repository "
+        "into separate directories at the same time. Each worktree has its own working "
+        "files and index but shares the object database with the main checkout. ")
+prompt = "Run " + str(time.time()) + ". " + para * 30 + "\n\nIn one sentence, what is a git worktree?"
+print(json.dumps({"model": sys.argv[1], "prompt": prompt, "stream": False, "options": {"num_predict": 120}}))
+' "${MODEL}")"
+LONG_RESP="$(curl -s "${OLLAMA_URL}/api/generate" -d "${LONG_REQ}")"
+SPEED_LINE="$(printf '%s' "${LONG_RESP}" | python3 -I -c '
 import json, sys
 r = json.load(sys.stdin)
 if "error" in r:
     print("ERROR " + str(r["error"])); sys.exit(0)
 ec, ed = r.get("eval_count", 0), max(r.get("eval_duration", 1), 1)
 pc, pd = r.get("prompt_eval_count", 0), max(r.get("prompt_eval_duration", 1), 1)
-load = r.get("load_duration", 0) / 1e9
-print(f"{ec / (ed / 1e9):.1f} tok/s generation, {pc / (pd / 1e9):.0f} tok/s prompt processing, model load {load:.1f} s")
+print("%.1f tok/s generation, %.0f tok/s prompt processing (%d-token prompt)" % (ec / (ed / 1e9), pc / (pd / 1e9), pc))
 ')"
 case "${SPEED_LINE}" in
   ERROR*) bad "${SPEED_LINE}" ;;
@@ -152,6 +176,7 @@ date:           $(date +%Y-%m-%d)
 model:          ${MODEL}
 context (env):  ${CTX_ENV:-unset (4096 default)}
 kv cache:       ${KV_ENV:-f16 (default)}
+model load:     ${LOAD_LINE} s
 speed:          ${SPEED_LINE}
 tool call:      ${TOOL_LINE}
 ollama ps:      $(printf '%s\n' "${PS_OUT}" | tail -n +2 | head -1)
