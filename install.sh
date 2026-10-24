@@ -132,14 +132,24 @@ else
       die "something is still serving ${OLLAMA_URL}. A second Ollama (Homebrew service?) may be running: brew services stop ollama"
     fi
   fi
-  open -a Ollama
-  for i in $(seq 1 60); do
-    if curl -sf "${OLLAMA_URL}" >/dev/null 2>&1; then
-      break
+  open -a Ollama || note "WARNING: 'open -a Ollama' failed; is Ollama.app in /Applications?"
+  wait_for_server() {  # $1 = seconds to wait; returns 0 when the server answers
+    local i
+    printf '    waiting for %s ' "${OLLAMA_URL}"
+    for i in $(seq 1 "$1"); do
+      if curl -sf "${OLLAMA_URL}" >/dev/null 2>&1; then printf ' up\n'; return 0; fi
+      printf '.'; sleep 1
+    done
+    printf ' no answer after %s s\n' "$1"; return 1
+  }
+  if ! wait_for_server 45; then
+    note "The app did not come back on its own. Open it by hand: Spotlight, type Ollama, Enter."
+    note "Wait for the llama icon in the menu bar."
+    if [[ -t 0 ]]; then
+      read -r -p "    Press Enter once the icon is there... " _
     fi
-    [[ ${i} -eq 60 ]] && die "Ollama did not start listening on ${OLLAMA_URL} within 60 s"
-    sleep 1
-  done
+    wait_for_server 90 || die "Ollama is still not listening on ${OLLAMA_URL}. Check: pgrep -fl -i ollama"
+  fi
   note "server is up: $(curl -s "${OLLAMA_URL}")"
 fi
 
