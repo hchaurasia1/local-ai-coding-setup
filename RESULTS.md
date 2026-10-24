@@ -38,7 +38,15 @@ in the rest by hand. These numbers feed the write-up, so be specific.
 **verify.sh output**
 
 ```
-(paste here)
+machine:        Apple M1 Pro, 16 GB
+date:           2026-10-24
+model:          qwen3.5:9b
+context (env):  32768
+kv cache:       q8_0
+speed:          21.5 tok/s generation, 7 tok/s prompt processing, model load 6.7 s
+tool call:      CALLED get_weather {"city":"Pune"}
+ollama ps:      qwen3.5:9b    d63f830f28d5    7.9 GB    100% GPU     32768      mlx       29 minutes from now    
+memory free:    28%
 ```
 
 **Context length that actually fit on the GPU:**
